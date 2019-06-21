@@ -129,6 +129,7 @@ Rails.application.routes.draw do
     resource :property_earnings, only: [:show], path: "/earnings"
     resource :property_dashboards, only: [:show], path: "/overview"
     resources :property_campaigns, only: [:index], path: "/campaigns"
+    resources :property_countries, only: [:index], path: "/countries"
     resources :versions, only: [:index], as: :property_versions, path: "/revisions"
     resource :advertisements, only: [:show], path: "/funder", constraints: ->(req) { [:js, :html, :json].any? req.format }
     resource :advertisement_tests, only: [:show], constraints: ->(req) { [:js, :html, :json].any? req.format } if Rails.env.test?

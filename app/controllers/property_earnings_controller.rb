@@ -2,6 +2,10 @@ class PropertyEarningsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_property
 
+  def show
+    @earnings = @property.earnings_report(@start_date, @end_date).to_hash
+  end
+
   private
 
   def set_property

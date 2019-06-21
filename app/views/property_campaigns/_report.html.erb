@@ -1,0 +1,24 @@
+<div class="table-responsive">
+  <table class="js-datatable table table-striped table-compact table-borderless u-datatable u-datatable__striped u-datatable__trigger">
+    <thead>
+      <tr class="border-bottom">
+        <th>Name</th>
+        <th class="text-center" style="width: 15%;"><span class="d-block small text-muted">total</span>Impressions</th>
+        <th class="text-center" style="width: 15%;"><span class="d-block small text-muted">total</span>Clicks</th>
+        <th class="text-center" style="width: 15%;"><span class="d-block small text-muted">average</span>CTR</th>
+        <th class="text-center" style="width: 15%;"><span class="d-block small text-muted">estimated</span>Earnings</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @campaigns.each do |campaign| %>
+        <tr>
+          <td class="text-secondary"><%= link_to_if authorized_user.can_admin_system?, campaign["campaign_name"], campaign_path(campaign["campaign_id"]) %></td>
+          <td class="text-center text-secondary"><%= number_with_delimiter campaign["impressions_count"] %></td>
+          <td class="text-center text-secondary"><%= number_with_delimiter campaign["clicks_count"] %></td>
+          <td class="text-center text-secondary"><%= number_to_percentage (campaign["click_rate"].to_f * 100) %></td>
+          <td class="text-center text-secondary"><%= number_to_currency campaign["property_revenue"] %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

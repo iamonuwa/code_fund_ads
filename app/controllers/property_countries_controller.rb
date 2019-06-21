@@ -1,9 +1,11 @@
-class PropertyCampaignsController < ApplicationController
+class PropertyCountriesController < ApplicationController
   before_action :authenticate_user!
   before_action :set_property
 
   def index
-    @campaigns = @property.campaign_report(@start_date, @end_date).to_hash
+    # TODO: Stub for future optimized country report
+    # @countries = @property.country_report(@start_date, @end_date).to_hash
+    @countries = []
   end
 
   private

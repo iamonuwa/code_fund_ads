@@ -182,6 +182,145 @@ class Property < ApplicationRecord
     Campaign.where id: subquery.distinct.select(:scoped_by_id)
   end
 
+  def campaign_report(start_date, end_date)
+    query = <<~SQL.squish
+      with data as (
+        select
+          campaigns.id campaign_id,
+          campaigns.name campaign_name,
+          sum(impressions_count) impressions_count,
+          sum(clicks_count) clicks_count,
+          avg(click_rate) average_daily_click_rate,
+          sum(gross_revenue_cents) * 0.01 gross_revenue,
+          sum(property_revenue_cents) * 0.01 property_revenue
+        from daily_summaries
+          join properties on properties.id = daily_summaries.impressionable_id
+          join campaigns on campaigns.id = daily_summaries.scoped_by_id
+        where impressions_count > 0
+          and impressionable_type = 'Property'
+          and impressionable_id = #{self.id}
+          and scoped_by_type = 'Campaign'
+          and displayed_at_date BETWEEN '#{Date.coerce(start_date).strftime("%F")}' AND '#{Date.coerce(end_date).strftime("%F")}'
+        group by campaign_id, campaign_name
+      )
+      select 
+        campaign_id,
+        campaign_name,
+        impressions_count,
+        clicks_count,
+        clicks_count / impressions_count::decimal click_rate,
+        average_daily_click_rate,
+        gross_revenue,
+        property_revenue,
+        gross_revenue / (impressions_count / 1000::decimal) ecpm 
+      from data 
+      where impressions_count > 0
+      order by gross_revenue desc, impressions_count desc
+    SQL
+
+    Property.connection.select_all(query)
+  end
+
+  def country_report(start_date, end_date)
+    query = <<~SQL.squish
+      with data as (
+        SELECT 
+          country_code,
+          count(*) total_impressions,
+          count(*) filter (where fallback_campaign = true) unpaid,
+          count(*) filter (where fallback_campaign = false) paid,
+          count(*) filter (where fallback_campaign = true AND clicked_at_date is not null) as unpaid_clicks_count,
+          count(*) filter (where fallback_campaign = false AND clicked_at_date is not null) as paid_clicks_count,
+          sum(estimated_gross_revenue_fractional_cents) as gross_revenue,
+          sum(estimated_property_revenue_fractional_cents) as publisher_earnings
+        FROM impressions
+          WHERE displayed_at_date BETWEEN '#{Date.coerce(start_date).strftime("%F")}' AND '#{Date.coerce(end_date).strftime("%F")}'
+          AND property_id = #{self.id}::bigint
+        group by country_code
+      )
+      
+      select 
+        country_code,
+        gross_revenue * 0.01 as revenue,
+        publisher_earnings * 0.01 as distributions,
+        total_impressions,
+        paid / total_impressions::decimal paid_percentage,
+        sum(paid) paid_impressions_count,
+        sum(paid_clicks_count) paid_clicks_count,
+        (
+            CASE
+              WHEN sum(paid) > 0 THEN
+                sum(paid_clicks_count) / sum(paid)::decimal
+              ELSE
+                0
+              END
+        ) as paid_click_rate,
+        sum(unpaid) unpaid_impressions_count,
+        sum(unpaid_clicks_count) unpaid_clicks_count,
+        (
+            CASE
+              WHEN sum(unpaid) > 0 THEN
+                sum(unpaid_clicks_count) / sum(unpaid)::decimal
+              ELSE
+                0
+              END
+        ) as unpaid_click_rate
+      from data 
+      group by country_code, total_impressions, gross_revenue, publisher_earnings, paid
+      order by paid desc
+    SQL
+
+    Property.connection.select_all(query)
+  end
+
+  def earnings_report(start_date, end_date)
+    query = <<~SQL.squish
+      with data as (
+        select
+          displayed_at_date,
+          count(*) impressions_count,
+          count(*) filter (where fallback_campaign = false) premium_impressions_count,
+          count(*) filter (where clicked_at_date is not null) clicks_count,
+          count(*) filter (where fallback_campaign = false AND clicked_at_date is not null) premium_clicks_count,
+          count(distinct ip_address) unique_ip_addresses_count, 
+          count(distinct ip_address) filter (where clicked_at_date is not null) unique_ip_addresses_with_clicks_count, 
+          sum(estimated_property_revenue_fractional_cents) * 0.01 property_revenue
+        from impressions
+          WHERE displayed_at_date BETWEEN '#{Date.coerce(start_date).strftime("%F")}' AND '#{Date.coerce(end_date).strftime("%F")}'
+          AND property_id = #{self.id}::bigint
+        group by displayed_at_date
+      )
+    
+      select 
+        displayed_at_date,
+        property_revenue,
+        impressions_count,
+        premium_impressions_count,
+        premium_clicks_count,
+        premium_impressions_count / impressions_count::decimal premium_impressions_percentage,
+        unique_ip_addresses_count,
+        unique_ip_addresses_with_clicks_count,
+        clicks_count,
+        clicks_count / impressions_count::decimal click_rate,
+        (
+          CASE
+          WHEN
+              clicks_count > 0
+          THEN
+              unique_ip_addresses_with_clicks_count / clicks_count::decimal
+          ELSE
+              0
+          END
+        ) AS ip_addresses_per_click,
+        impressions_count / unique_ip_addresses_count::decimal ad_views_per_unique_ip_address,
+        property_revenue::decimal / unique_ip_addresses_count::decimal cost_per_unique_ip_address
+      from data
+      where impressions_count > 0
+    SQL
+
+    Property.connection.select_all(query)
+  end
+
   # protected instance methods ................................................
 
   # private instance methods ..................................................
